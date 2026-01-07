@@ -381,20 +381,34 @@ const Expenses = (() => {
   }
   
   // Update the total amount display
-  function updateTotalAmount(amount) {
-    // Get fixed expenses from localStorage (still used for this)
-    const fixedExpenses = parseFloat(localStorage.getItem('fixedExpenses')) || 0;
-    
-    // Add fixed expenses to the total amount
-    const totalWithFixed = amount + fixedExpenses;
-    
-    if (totalAmountElement) {
-      totalAmountElement.textContent = formatCurrency(totalWithFixed);
+async function updateTotalAmount(amount) {
+  // Get fixed expenses from Firestore
+  let fixedExpenses = 0;
+  
+  if (currentUserId) {
+    try {
+      const { getUserConfigDoc, getDoc } = await import('./firebase-config.js');
+      const configDoc = getUserConfigDoc(currentUserId);
+      const docSnap = await getDoc(configDoc);
+      
+      if (docSnap.exists()) {
+        fixedExpenses = docSnap.data().fixedExpenses || 0;
+      }
+    } catch (error) {
+      console.error('Error loading fixed expenses:', error);
     }
-    
-    // Update the dashboard to reflect the new total including fixed expenses
-    document.dispatchEvent(new Event('expensesUpdated'));
   }
+  
+  // Add fixed expenses to the total amount
+  const totalWithFixed = amount + fixedExpenses;
+  
+  if (totalAmountElement) {
+    totalAmountElement.textContent = formatCurrency(totalWithFixed);
+  }
+  
+  // Update the dashboard to reflect the new total including fixed expenses
+  document.dispatchEvent(new Event('expensesUpdated'));
+}
   
   // Format currency
   function formatCurrency(amount) {
