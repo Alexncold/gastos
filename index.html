@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mi Control de Gastos</title>
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="header-content">
+                <h1>Mi Control de Gastos</h1>
+                <div class="user-info">
+                    <span class="username">Usuario</span>
+                    <div class="avatar">U</div>
+                </div>
+            </div>
+        </header>
+
+        <nav class="tabs">
+            <button class="tab-btn active" data-tab="expenses">
+                <i class="tab-icon fas fa-money-bill-wave"></i>
+                <span>Gastos</span>
+            </button>
+            <button class="tab-btn" data-tab="dashboard">
+                <i class="tab-icon fas fa-chart-bar"></i>
+                <span>Dashboard</span>
+            </button>
+            <button class="tab-btn" data-tab="settings">
+                <i class="tab-icon fas fa-cog"></i>
+                <span>Ajustes</span>
+            </button>
+        </nav>
+
+        <main class="main-content">
+            <!-- Dashboard Section -->
+            <section id="dashboard" class="tab-content">
+                <div id="dashboard-callout" class="callout" style="display: none;"></div>
+                
+                <!-- Dashboard Top Row -->
+                <div class="dashboard-top-row">
+                    <!-- Date Range Filter -->
+                    <div class="date-filter card">
+                        <h3>Filtrar por fecha</h3>
+                        <div class="filter-controls">
+                            <div class="form-group">
+                                <label for="date-from">Desde:</label>
+                                <input type="date" id="date-from" class="form-control">
+                            </div>
+                            <div class="form-group">
+                                <label for="date-to">Hasta:</label>
+                                <input type="date" id="date-to" class="form-control">
+                            </div>
+                            <button id="apply-filter" class="btn btn-primary">Filtrar</button>
+                        </div>
+                    </div>
+
+                    <!-- Chart Section -->
+                    <div class="chart-section card">
+                        <div class="chart-header">
+                            <h3>Resumen de Gastos</h3>
+                            <div class="chart-legend" id="chart-legend"></div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="expenses-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Summary Cards -->
+                <div class="summary-cards">
+                    <div class="card">
+                        <div class="card-icon">
+                            <i class="fas fa-calendar-month"></i>
+                        </div>
+                        <div class="card-content">
+                            <h3>Mes Actual</h3>
+                            <p class="amount" id="monthly-total">$0.00</p>
+                            <span class="subtext" id="monthly-budget">Sin límite establecido</span>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-icon">
+                            <i class="fas fa-calendar-day"></i>
+                        </div>
+                        <div class="card-content">
+                            <h3>Hoy</h3>
+                            <p class="amount" id="daily-total">$0.00</p>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-icon">
+                            <i class="fas fa-calendar-week"></i>
+                        </div>
+                        <div class="card-content">
+                            <h3>Esta Semana</h3>
+                            <p class="amount" id="weekly-total">$0.00</p>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-icon">
+                            <i class="fas fa-wallet"></i>
+                        </div>
+                        <div class="card-content">
+                            <h3>Restante</h3>
+                            <p class="amount" id="remaining-amount">-</p>
+                            <span class="subtext" id="budget-progress"></span>
+                        </div>
+                    </div>
+                </div>
+
+
+                <!-- Categories Breakdown -->
+                <div class="categories-section card">
+                    <h3>Gastos por Categoría</h3>
+                    <div class="table-responsive">
+                        <table class="categories-table">
+                            <thead>
+                                <tr>
+                                    <th>Categoría</th>
+                                    <th>Total</th>
+                                    <th>Porcentaje</th>
+                                    <th>Barra</th>
+                                </tr>
+                            </thead>
+                            <tbody id="categories-tbody">
+                                <tr>
+                                    <td colspan="4" class="text-center">No hay datos para mostrar</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Expenses Section -->
+            <section id="expenses" class="tab-content active">
+                <div id="expenses-callout" class="callout" style="display: none;"></div>
+                <div class="expense-form-container">
+                    <h2 id="expense-form-title">Nuevo Gasto</h2>
+                    <form id="expense-form" class="expense-form">
+                        <input type="hidden" id="expense-id">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="expense-amount">Monto ($)</label>
+                                <input type="text" id="expense-amount" inputmode="decimal" pattern="[0-9]+([\.,][0-9]{1,2})?" placeholder="0,00" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="expense-date">Fecha</label>
+                                <input type="date" id="expense-date" required>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="expense-description">Descripción</label>
+                            <input type="text" id="expense-description" placeholder="¿En qué gastaste?" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="expense-category">Categoría</label>
+                            <select id="expense-category" required>
+                                <option value="">Selecciona una categoría</option>
+                                <option value="comida">Comida</option>
+                                <option value="transporte">Transporte</option>
+                                <option value="servicios">Servicios</option>
+                                <option value="otros">Otros</option>
+                            </select>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary" id="expense-submit-btn">Agregar Gasto</button>
+                            <button type="button" class="btn btn-secondary" id="expense-cancel-btn" style="display: none;">Cancelar</button>
+                        </div>
+                    </form>
+                </div>
+                <div class="expenses-list">
+                    <div class="expenses-header">
+                        <h2>Historial de Gastos</h2>
+                        <div class="expenses-summary">
+                            <div class="summary-item">
+                                <span>Presupuesto Mensual:</span>
+                                <span id="monthly-budget-amount">$0,00</span>
+                            </div>
+                            <div class="summary-item">
+                                <span>Gasto Fijo:</span>
+                                <span id="fixed-expenses-amount">$0,00</span>
+                            </div>
+                            <div class="summary-item">
+                                <span>Límite:</span>
+                                <span id="spending-limit-amount">$0,00</span>
+                            </div>
+                            <div class="summary-item total-expenses">
+                                <span>Total:</span>
+                                <span id="total-amount">$0,00</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="expenses-filters">
+                        <div class="search-box">
+                            <input type="text" id="expense-search" placeholder="Buscar gastos...">
+                        </div>
+                        <select class="filter-select" id="category-filter">
+                            <option value="all">Todas las categorías</option>
+                            <option value="comida">Comida</option>
+                            <option value="transporte">Transporte</option>
+                            <option value="servicios">Servicios</option>
+                            <option value="otros">Otros</option>
+                        </select>
+                    </div>
+                    <div class="expenses-table-container">
+                        <table class="expenses-table">
+                            <thead>
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Descripción</th>
+                                    <th>Categoría</th>
+                                    <th class="text-right">Monto</th>
+                                    <th class="text-center">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="expenses-tbody">
+                                <tr class="empty-row">
+                                    <td colspan="5" class="text-center">No hay gastos registrados</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Settings Section -->
+            <section id="settings" class="tab-content">
+                <div class="settings-section">
+                    <h2>Configuración</h2>
+                    <form id="settings-form" class="settings-form">
+                        <div class="settings-group">
+                            <h3>Presupuesto</h3>
+                            <div class="form-group">
+                                <label for="monthly-budget">Presupuesto Mensual</label>
+                                <div class="input-with-reset">
+                                    <input type="number" id="monthly-budget" step="0.01" min="0" placeholder="0.00">
+                                    <button type="button" class="reset-btn" data-target="monthly-budget" title="Restablecer a 0">
+                                        <i class="fas fa-undo"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="fixed-expense">Gasto Fijo Mensual</label>
+                                <div class="input-with-info">
+                                    <div class="input-with-reset">
+                                        <input type="number" id="fixed-expense" step="0.01" min="0" placeholder="0.00">
+                                        <button type="button" class="reset-btn" data-target="fixed-expense" title="Restablecer a 0">
+                                            <i class="fas fa-undo"></i>
+                                        </button>
+                                    </div>
+                                    <p class="input-info">Este monto se agregará automáticamente el primer día de cada mes</p>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="currency">Moneda</label>
+                                <select id="currency">
+                                    <option value="USD">USD ($)</option>
+                                    <option value="EUR">EUR (€)</option>
+                                    <option value="GBP">GBP (£)</option>
+                                    <option value="JPY">JPY (¥)</option>
+                                    <option value="BRL">BRL (R$)</option>
+                                    <option value="MXN">MXN ($)</option>
+                                    <option value="COP">COP ($)</option>
+                                    <option value="ARS" selected>ARS ($)</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="spending-limit">Límite de Gastos Mensual</label>
+                                <div class="input-with-info">
+                                    <div class="input-with-reset">
+                                        <input type="number" id="spending-limit" step="0.01" min="0" placeholder="0.00">
+                                        <button type="button" class="reset-btn" data-target="spending-limit" title="Restablecer a 0">
+                                            <i class="fas fa-undo"></i>
+                                        </button>
+                                    </div>
+                                    <p class="input-info">Recibirás alertas cuando te acerques a este límite</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">Guardar Configuración</button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Load Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Application Scripts -->
+    <script src="app.js"></script>
+    <script src="expenses.js"></script>
+    <script src="dashboard.js"></script>
+</body>
+</html>
