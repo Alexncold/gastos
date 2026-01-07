@@ -15,21 +15,51 @@ const Expenses = (() => {
   const expenseSearchInput = document.getElementById('expense-search');
   const categoryFilterSelect = document.getElementById('category-filter');
   
+  // Firebase
+  const { 
+    getExpensesCollection, 
+    doc, 
+    setDoc, 
+    deleteDoc, 
+    onSnapshot, 
+    query, 
+    where, 
+    orderBy,
+    Timestamp
+  } = firebaseServices;
+  
   // State
   let expenses = [];
   let isEditing = false;
+  let unsubscribeExpenses = null;
+  let currentUserId = null;
   
   // Initialize the module
-  function init() {
+  function init(userId) {
+    if (!userId) return;
+    
+    currentUserId = userId;
+    
     // Set default date to today
     const today = new Date().toISOString().split('T')[0];
     expenseDateInput.value = today;
     
-    // Load expenses from localStorage
-    loadExpenses();
+    // Setup real-time listener for expenses
+    setupExpensesListener();
     
     // Add event listeners
     setupEventListeners();
+    
+    // Listen for auth state changes to handle sign out
+    document.addEventListener('userLoggedOut', () => {
+      if (unsubscribeExpenses) {
+        unsubscribeExpenses();
+        unsubscribeExpenses = null;
+      }
+      currentUserId = null;
+      expenses = [];
+      renderExpenses();
+    });
   }
   
   // Set up event listeners
@@ -60,7 +90,7 @@ const Expenses = (() => {
   }
   
   // Handle form submission
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     
     // Validate form
@@ -68,61 +98,98 @@ const Expenses = (() => {
       return;
     }
     
-    // Format the amount correctly
-    let amountValue = expenseAmountInput.value;
-    // Remove any existing formatting
-    amountValue = amountValue.replace(/[^0-9.]/g, '');
-    // Convert to number and ensure it's a valid number
-    const amount = parseFloat(amountValue);
+    // Show loading state
+    const submitBtn = expenseForm.querySelector('button[type="submit"]');
+    const originalBtnText = submitBtn.innerHTML;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Procesando...';
     
-    if (isNaN(amount)) {
-      showNotification('Por favor ingrese un monto válido', 'error');
-      return;
+    try {
+      // Get form values
+      const id = expenseIdInput.value;
+      const monto = parseFloat(expenseAmountInput.value.replace(/[^0-9.]/g, ''));
+      const fecha = expenseDateInput.value;
+      const detalle = expenseDescriptionInput.value.trim();
+      const categoria = expenseCategorySelect.value;
+      
+      // Validate form
+      if (!monto || !fecha || !detalle || !categoria) {
+        throw new Error('Por favor completa todos los campos');
+      }
+      
+      // Create expense object for Firestore
+      const expenseData = {
+        monto,
+        fecha,
+        detalle,
+        categoria,
+        createdAt: Timestamp.now()
+      };
+      
+      // Add or update expense in Firestore
+      if (isEditing && id) {
+        await updateExpense(id, expenseData);
+        showNotification('Gasto actualizado correctamente', 'success');
+      } else {
+        await addExpense(expenseData);
+        showNotification('Gasto agregado correctamente', 'success');
+      }
+      
+      // Reset form
+      resetForm();
+    } catch (error) {
+      console.error('Error saving expense:', error);
+      showNotification(error.message || 'Error al guardar el gasto', 'error');
+    } finally {
+      // Reset button state
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = originalBtnText;
     }
-    
-    const expenseData = {
-      id: isEditing ? expenseIdInput.value : Date.now().toString(),
-      fecha: expenseDateInput.value,
-      detalle: expenseDescriptionInput.value.trim(),
-      categoria: expenseCategorySelect.value,
-      monto: amount
-    };
-    
-    if (isEditing) {
-      updateExpense(expenseData);
-    } else {
-      addExpense(expenseData);
-    }
-    
-    resetForm();
   }
   
   // Add a new expense
-  function addExpense(expense) {
-    expenses.unshift(expense);
-    saveExpenses();
-    renderExpenses();
-    showNotification('Gasto agregado correctamente', 'success');
+  async function addExpense(expenseData) {
+    if (!currentUserId) throw new Error('Usuario no autenticado');
+    
+    try {
+      const newExpenseRef = doc(getExpensesCollection(currentUserId));
+      await setDoc(newExpenseRef, {
+        ...expenseData,
+        createdAt: Timestamp.now()
+      });
+      return newExpenseRef.id;
+    } catch (error) {
+      console.error('Error adding expense:', error);
+      throw new Error('Error al agregar el gasto');
+    }
   }
   
   // Update an existing expense
-  function updateExpense(updatedExpense) {
-    const index = expenses.findIndex(exp => exp.id === updatedExpense.id);
-    if (index !== -1) {
-      expenses[index] = updatedExpense;
-      saveExpenses();
-      renderExpenses();
-      showNotification('Gasto actualizado correctamente', 'success');
+  async function updateExpense(id, updatedData) {
+    if (!currentUserId) throw new Error('Usuario no autenticado');
+    
+    try {
+      const expenseRef = doc(getExpensesCollection(currentUserId), id);
+      await setDoc(expenseRef, updatedData, { merge: true });
+    } catch (error) {
+      console.error('Error updating expense:', error);
+      throw new Error('Error al actualizar el gasto');
     }
   }
   
   // Delete an expense
-  function deleteExpense(id) {
-    if (confirm('¿Estás seguro de que deseas eliminar este gasto?')) {
-      expenses = expenses.filter(exp => exp.id !== id);
-      saveExpenses();
-      renderExpenses();
+  async function deleteExpense(id) {
+    if (!currentUserId || !confirm('¿Estás seguro de que deseas eliminar este gasto?')) {
+      return;
+    }
+    
+    try {
+      const expenseRef = doc(getExpensesCollection(currentUserId), id);
+      await deleteDoc(expenseRef);
       showNotification('Gasto eliminado correctamente', 'success');
+    } catch (error) {
+      console.error('Error deleting expense:', error);
+      showNotification('Error al eliminar el gasto', 'error');
     }
   }
   
@@ -377,41 +444,47 @@ const Expenses = (() => {
     e.target.value = number.toString().replace('.', ',');
   }
   
-  // Save expenses to localStorage
-  function saveExpenses() {
-    localStorage.setItem('expenses', JSON.stringify(expenses));
-    // Dispatch event to notify other components
-    document.dispatchEvent(new Event('expensesUpdated'));
-  }
-  
-  // Load expenses from localStorage
-  function loadExpenses() {
-    const savedExpenses = localStorage.getItem('expenses');
-    if (savedExpenses) {
-      expenses = JSON.parse(savedExpenses);
-      renderExpenses();
+  // Set up real-time listener for expenses
+  function setupExpensesListener() {
+    if (!currentUserId) return;
+    
+    // Unsubscribe from previous listener if exists
+    if (unsubscribeExpenses) {
+      unsubscribeExpenses();
     }
+    
+    const expensesQuery = query(
+      getExpensesCollection(currentUserId),
+      orderBy('fecha', 'desc')
+    );
+    
+    unsubscribeExpenses = onSnapshot(expensesQuery, 
+      (querySnapshot) => {
+        expenses = [];
+        querySnapshot.forEach((doc) => {
+          expenses.push({ id: doc.id, ...doc.data() });
+        });
+        renderExpenses();
+      },
+      (error) => {
+        console.error('Error getting expenses:', error);
+        showNotification('Error al cargar los gastos', 'error');
+      }
+    );
   }
   
   // Show notification
   function showNotification(message, type = 'info') {
-    // Create notification element if it doesn't exist
-    let notification = document.querySelector('.notification');
-    
-    if (!notification) {
-      notification = document.createElement('div');
-      notification.className = `notification notification-${type}`;
-      document.body.appendChild(notification);
-      
-      // Auto-remove notification after 3 seconds
-      setTimeout(() => {
-        notification.classList.add('fade-out');
-        setTimeout(() => notification.remove(), 300);
-      }, 3000);
-    }
-    
+    let notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
     notification.textContent = message;
-    notification.className = `notification notification-${type} show`;
+    document.body.appendChild(notification);
+    
+    // Auto-remove notification after 3 seconds
+    setTimeout(() => {
+      notification.classList.add('fade-out');
+      setTimeout(() => notification.remove(), 300);
+    }, 3000);
   }
   
   // Utility function to escape HTML
@@ -448,7 +521,7 @@ const Expenses = (() => {
   };
 })();
 
-// Initialize the expenses module when the DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-  Expenses.init();
+// Initialize the expenses module when the user is logged in
+document.addEventListener('userLoggedIn', (e) => {
+  Expenses.init(e.detail.user.uid);
 });

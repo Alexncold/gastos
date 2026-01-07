@@ -10,6 +10,33 @@
     <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="styles.css">
+    
+    <!-- Firebase SDKs -->
+    <script type="module">
+        // Import the functions you need from the SDKs you need
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getAuth } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getFirestore } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyC5oMo7ZrMUpXGLk39Z6iBC0Drbdlk_KeE",
+            authDomain: "control-gastos-app-572be.firebaseapp.com",
+            projectId: "control-gastos-app-572be",
+            storageBucket: "control-gastos-app-572be.firebasestorage.app",
+            messagingSenderId: "824585639306",
+            appId: "1:824585639306:web:1a442674bb7ff55ca76473"
+        };
+        
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        
+        // Make auth and db available globally
+        window.firebaseAuth = auth;
+        window.firebaseDb = db;
+    </script>
 </head>
 <body>
     <div class="app-container">
@@ -301,9 +328,19 @@
     <!-- Load Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
-    <!-- Application Scripts -->
-    <script src="app.js"></script>
-    <script src="expenses.js"></script>
-    <script src="dashboard.js"></script>
+    <!-- App Scripts (must be in this order) -->
+    <script src="firebase-config.js" type="module"></script>
+    <script src="auth.js" type="module"></script>
+    <script src="app.js" type="module"></script>
+    <script src="expenses.js" type="module"></script>
+    <script src="dashboard.js" type="module"></script>
+    
+    <!-- Initialize the app -->
+    <script type="module">
+        // Initialize the app when all modules are loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('App initialized');
+        });
+    </script>
 </body>
 </html>
