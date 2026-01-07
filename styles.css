@@ -1047,3 +1047,155 @@ textarea:focus {
     border-bottom-color: #2a2a4a;
   }
 }
+
+/* Authentication Styles */
+.auth-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: var(--spacing-lg);
+}
+
+.auth-card {
+  background: white;
+  border-radius: var(--border-radius-lg);
+  padding: var(--spacing-xxl);
+  box-shadow: var(--shadow-md);
+  width: 100%;
+  max-width: 400px;
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.auth-card h2 {
+  text-align: center;
+  color: var(--gray-800);
+  margin-bottom: var(--spacing-xl);
+}
+
+.auth-form .form-group {
+  margin-bottom: var(--spacing-lg);
+}
+
+.auth-form label {
+  display: block;
+  margin-bottom: var(--spacing-xs);
+  font-weight: 500;
+  color: var(--gray-700);
+}
+
+.auth-form input {
+  width: 100%;
+}
+
+.auth-form .btn {
+  width: 100%;
+  margin-top: var(--spacing-sm);
+}
+
+.btn-link {
+  background: none;
+  color: var(--primary);
+  text-decoration: underline;
+  padding: var(--spacing-sm);
+  font-size: 0.9rem;
+}
+
+.btn-link:hover {
+  background: none;
+  color: var(--secondary);
+  transform: none;
+}
+
+.auth-error {
+  background-color: rgba(239, 71, 111, 0.1);
+  border: 1px solid var(--danger);
+  border-radius: var(--border-radius);
+  color: var(--danger);
+  padding: var(--spacing-md);
+  margin-top: var(--spacing-md);
+  font-size: 0.9rem;
+  display: none;
+}
+
+/* Notification Styles */
+.notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 1rem 1.5rem;
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow-md);
+  z-index: 1000;
+  animation: slideIn 0.3s ease-out;
+  max-width: 400px;
+}
+
+.notification-success {
+  background-color: var(--success);
+  color: white;
+}
+
+.notification-error {
+  background-color: var(--danger);
+  color: white;
+}
+
+.notification-info {
+  background-color: var(--primary);
+  color: white;
+}
+
+.notification.fade-out {
+  animation: fadeOut 0.3s ease-out;
+  opacity: 0;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+/* Callout Styles (Notion-style alerts) */
+.callout {
+  padding: 1rem 1.5rem;
+  border-radius: var(--border-radius);
+  margin-bottom: var(--spacing-lg);
+  border-left: 4px solid;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  display: none;
+}
+
+.callout-info {
+  background-color: rgba(93, 156, 236, 0.1);
+  border-left-color: var(--primary);
+  color: #2c5aa0;
+}
+
+.callout-warning {
+  background-color: rgba(249, 199, 79, 0.1);
+  border-left-color: var(--warning);
+  color: #8b6914;
+}
+
+.callout-danger {
+  background-color: rgba(239, 71, 111, 0.1);
+  border-left-color: var(--danger);
+  color: #c53030;
+}

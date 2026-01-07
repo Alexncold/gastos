@@ -2,8 +2,12 @@
 const tabButtons = document.querySelectorAll('.tab-btn');
 const tabContents = document.querySelectorAll('.tab-content');
 
-// Set default active tab from URL hash or default to 'dashboard'
-const defaultTab = window.location.hash.substring(1) || 'dashboard';
+// Set default active tab from URL hash or default to 'expenses'
+const defaultTab = window.location.hash.substring(1) || 'expenses';
+
+// State
+let currentUserId = null;
+let unsubscribeConfig = null;
 
 // Initialize the app
 function initApp() {
@@ -50,8 +54,8 @@ function setActiveTab(tabId) {
   if (activeTabContent) {
     activeTabContent.classList.add('active');
   } else {
-    // Fallback to dashboard if tab doesn't exist
-    document.getElementById('dashboard').classList.add('active');
+    // Fallback to expenses if tab doesn't exist
+    document.getElementById('expenses').classList.add('active');
   }
   
   // Activate the clicked tab button
@@ -65,18 +69,78 @@ function setActiveTab(tabId) {
 function setupEventListeners() {
   // Handle browser back/forward buttons
   window.addEventListener('popstate', () => {
-    const tabId = window.location.hash.substring(1) || 'dashboard';
+    const tabId = window.location.hash.substring(1) || 'expenses';
     setActiveTab(tabId);
   });
   
-  // Prevent form submission for now (will be implemented later)
-  const forms = document.querySelectorAll('form');
-  forms.forEach(form => {
-    form.addEventListener('submit', (e) => {
+  // Prevent default form submission and handle configuration form
+  const settingsForm = document.getElementById('settings-form');
+  if (settingsForm) {
+    settingsForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      // Form submission logic will be added later
-      console.log('Form submitted:', form.id);
+      await saveConfiguration();
     });
+  }
+  
+  // Handle configuration input changes (auto-save on change)
+  const monthlyBudgetInput = document.getElementById('monthly-budget');
+  const fixedExpenseInput = document.getElementById('fixed-expense');
+  const spendingLimitInput = document.getElementById('spending-limit');
+  
+  if (monthlyBudgetInput) {
+    monthlyBudgetInput.addEventListener('change', async () => {
+      const amount = parseFloat(monthlyBudgetInput.value) || 0;
+      await saveMonthlyBudget(amount);
+    });
+  }
+  
+  if (fixedExpenseInput) {
+    fixedExpenseInput.addEventListener('change', async () => {
+      const amount = parseFloat(fixedExpenseInput.value) || 0;
+      await saveFixedExpenses(amount);
+    });
+  }
+  
+  if (spendingLimitInput) {
+    spendingLimitInput.addEventListener('change', async () => {
+      const amount = parseFloat(spendingLimitInput.value) || 0;
+      await saveSpendingLimit(amount);
+    });
+  }
+  
+  // Handle reset button clicks
+  document.addEventListener('click', async (e) => {
+    const resetBtn = e.target.closest('.reset-btn');
+    if (!resetBtn) return;
+
+    const targetId = resetBtn.getAttribute('data-target');
+    if (!targetId) return;
+
+    const input = document.querySelector(`#${targetId}[type="number"]`);
+    if (!input) {
+      console.error(`Input element with ID '${targetId}' not found`);
+      return;
+    }
+
+    console.log('Resetting input:', targetId);
+    
+    // Set the input value to 0
+    input.value = '0';
+    
+    // Save to Firebase
+    const amount = 0;
+    if (targetId === 'monthly-budget') {
+      await saveMonthlyBudget(amount);
+    } else if (targetId === 'fixed-expense') {
+      await saveFixedExpenses(amount);
+    } else if (targetId === 'spending-limit') {
+      await saveSpendingLimit(amount);
+    }
+    
+    // Trigger change event
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    
+    console.log('Reset completed for:', targetId);
   });
 }
 
@@ -88,68 +152,215 @@ function updateFooterYear() {
   }
 }
 
-// Budget Management
-const BUDGET_STORAGE_KEY = 'monthlyBudget';
-const FIXED_EXPENSES_KEY = 'fixedExpenses';
-const SPENDING_LIMIT_KEY = 'spendingLimit';
-
-// Format number as currency (simplified version)
-function formatNumberAsCurrency(amount) {
-  return new Intl.NumberFormat('es-AR', {
-    style: 'currency',
-    currency: 'ARS',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  }).format(amount);
-}
-
-// Save budget to localStorage and update display
-function saveMonthlyBudget(amount) {
-  localStorage.setItem(BUDGET_STORAGE_KEY, amount);
-  updateBudgetDisplay(amount, 'monthly-budget-amount');
+// Initialize configuration for a logged-in user
+async function initConfiguration(userId) {
+  if (!userId) {
+    console.error('No user ID provided to initConfiguration()');
+    return;
+  }
   
-  // Dispatch event to notify other components about budget update
-  const event = new CustomEvent('budgetUpdated', { detail: { amount } });
-  document.dispatchEvent(event);
+  currentUserId = userId;
+  console.log('Initializing configuration for user:', userId);
   
-  return amount;
+  // Setup real-time listener for configuration
+  await setupConfigListener();
 }
 
-// Save fixed expenses to localStorage and update display
-function saveFixedExpenses(amount) {
-  localStorage.setItem(FIXED_EXPENSES_KEY, amount);
-  updateBudgetDisplay(amount, 'fixed-expenses-amount');
+// Setup real-time listener for configuration from Firestore
+async function setupConfigListener() {
+  if (!currentUserId) {
+    console.error('Cannot setup config listener: no user ID');
+    return;
+  }
   
-  // Dispatch event to notify other components about fixed expenses update
-  const event = new CustomEvent('fixedExpensesUpdated', { detail: { amount } });
-  document.dispatchEvent(event);
+  // Unsubscribe from previous listener if exists
+  if (unsubscribeConfig) {
+    unsubscribeConfig();
+  }
   
-  return amount;
+  try {
+    // Dynamically import Firebase functions
+    const { getUserConfigDoc, onSnapshot } = await import('./firebase-config.js');
+    
+    const configDoc = getUserConfigDoc(currentUserId);
+    
+    unsubscribeConfig = onSnapshot(configDoc, 
+      (doc) => {
+        if (doc.exists()) {
+          const data = doc.data();
+          console.log('Configuration loaded:', data);
+          
+          // Update UI with loaded configuration
+          updateConfigurationUI(data);
+        } else {
+          console.log('No configuration document found, using defaults');
+          updateConfigurationUI({
+            monthlyBudget: 0,
+            fixedExpenses: 0,
+            spendingLimit: 0
+          });
+        }
+      },
+      (error) => {
+        console.error('Error getting configuration:', error);
+      }
+    );
+  } catch (error) {
+    console.error('Error setting up config listener:', error);
+  }
 }
 
-// Save spending limit to localStorage and update display
-function saveSpendingLimit(amount) {
-  localStorage.setItem(SPENDING_LIMIT_KEY, amount);
-  updateBudgetDisplay(amount, 'spending-limit-amount');
-  return amount;
+// Update configuration UI with loaded data
+function updateConfigurationUI(config) {
+  const monthlyBudgetInput = document.getElementById('monthly-budget');
+  const fixedExpenseInput = document.getElementById('fixed-expense');
+  const spendingLimitInput = document.getElementById('spending-limit');
+  
+  // Update inputs
+  if (monthlyBudgetInput && config.monthlyBudget !== undefined) {
+    monthlyBudgetInput.value = config.monthlyBudget;
+  }
+  
+  if (fixedExpenseInput && config.fixedExpenses !== undefined) {
+    fixedExpenseInput.value = config.fixedExpenses;
+  }
+  
+  if (spendingLimitInput && config.spendingLimit !== undefined) {
+    spendingLimitInput.value = config.spendingLimit;
+  }
+  
+  // Update display elements
+  updateBudgetDisplay(config.monthlyBudget || 0, 'monthly-budget-amount');
+  updateBudgetDisplay(config.fixedExpenses || 0, 'fixed-expenses-amount');
+  updateBudgetDisplay(config.spendingLimit || 0, 'spending-limit-amount');
 }
 
-// Load budget from localStorage
-function loadMonthlyBudget() {
-  const budget = localStorage.getItem(BUDGET_STORAGE_KEY);
-  return budget !== null ? parseFloat(budget) : 0;
+// Save entire configuration to Firestore
+async function saveConfiguration() {
+  if (!currentUserId) {
+    showNotification('Usuario no autenticado', 'error');
+    return;
+  }
+  
+  const monthlyBudget = parseFloat(document.getElementById('monthly-budget')?.value) || 0;
+  const fixedExpenses = parseFloat(document.getElementById('fixed-expense')?.value) || 0;
+  const spendingLimit = parseFloat(document.getElementById('spending-limit')?.value) || 0;
+  
+  try {
+    // Dynamically import Firebase functions
+    const { getUserConfigDoc, setDoc } = await import('./firebase-config.js');
+    
+    const configDoc = getUserConfigDoc(currentUserId);
+    
+    await setDoc(configDoc, {
+      monthlyBudget,
+      fixedExpenses,
+      spendingLimit,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+    
+    console.log('Configuration saved:', { monthlyBudget, fixedExpenses, spendingLimit });
+    showNotification('Configuración guardada correctamente', 'success');
+    
+    // Dispatch events for other modules
+    document.dispatchEvent(new CustomEvent('budgetUpdated', { detail: { amount: monthlyBudget } }));
+    document.dispatchEvent(new CustomEvent('fixedExpensesUpdated', { detail: { amount: fixedExpenses } }));
+    document.dispatchEvent(new CustomEvent('spendingLimitUpdated', { detail: { amount: spendingLimit } }));
+    
+  } catch (error) {
+    console.error('Error saving configuration:', error);
+    showNotification('Error al guardar la configuración', 'error');
+  }
 }
 
-// Load fixed expenses from localStorage
-function loadFixedExpenses() {
-  const fixedExpenses = localStorage.getItem(FIXED_EXPENSES_KEY);
-  return fixedExpenses !== null ? parseFloat(fixedExpenses) : 0;
+// Save monthly budget to Firestore
+async function saveMonthlyBudget(amount) {
+  if (!currentUserId) {
+    console.error('Cannot save budget: no user ID');
+    return;
+  }
+  
+  try {
+    const { getUserConfigDoc, setDoc } = await import('./firebase-config.js');
+    
+    const configDoc = getUserConfigDoc(currentUserId);
+    
+    await setDoc(configDoc, {
+      monthlyBudget: amount,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+    
+    console.log('Monthly budget saved:', amount);
+    updateBudgetDisplay(amount, 'monthly-budget-amount');
+    
+    // Dispatch event to notify other components
+    document.dispatchEvent(new CustomEvent('budgetUpdated', { detail: { amount } }));
+    
+    return amount;
+  } catch (error) {
+    console.error('Error saving monthly budget:', error);
+    showNotification('Error al guardar el presupuesto', 'error');
+  }
 }
 
-// Load spending limit from localStorage
-function loadSpendingLimit() {
-  const spendingLimit = localStorage.getItem(SPENDING_LIMIT_KEY);
-  return spendingLimit !== null ? parseFloat(spendingLimit) : 0;
+// Save fixed expenses to Firestore
+async function saveFixedExpenses(amount) {
+  if (!currentUserId) {
+    console.error('Cannot save fixed expenses: no user ID');
+    return;
+  }
+  
+  try {
+    const { getUserConfigDoc, setDoc } = await import('./firebase-config.js');
+    
+    const configDoc = getUserConfigDoc(currentUserId);
+    
+    await setDoc(configDoc, {
+      fixedExpenses: amount,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+    
+    console.log('Fixed expenses saved:', amount);
+    updateBudgetDisplay(amount, 'fixed-expenses-amount');
+    
+    // Dispatch event to notify other components
+    document.dispatchEvent(new CustomEvent('fixedExpensesUpdated', { detail: { amount } }));
+    
+    return amount;
+  } catch (error) {
+    console.error('Error saving fixed expenses:', error);
+    showNotification('Error al guardar los gastos fijos', 'error');
+  }
+}
+
+// Save spending limit to Firestore
+async function saveSpendingLimit(amount) {
+  if (!currentUserId) {
+    console.error('Cannot save spending limit: no user ID');
+    return;
+  }
+  
+  try {
+    const { getUserConfigDoc, setDoc } = await import('./firebase-config.js');
+    
+    const configDoc = getUserConfigDoc(currentUserId);
+    
+    await setDoc(configDoc, {
+      spendingLimit: amount,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+    
+    console.log('Spending limit saved:', amount);
+    updateBudgetDisplay(amount, 'spending-limit-amount');
+    
+    // Dispatch event to notify other components
+    document.dispatchEvent(new CustomEvent('spendingLimitUpdated', { detail: { amount } }));
+    
+    return amount;
+  } catch (error) {
+    console.error('Error saving spending limit:', error);
+    showNotification('Error al guardar el límite de gastos', 'error');
+  }
 }
 
 // Update the display for budget or fixed expenses
@@ -160,106 +371,28 @@ function updateBudgetDisplay(amount, elementId) {
   }
 }
 
-// Initialize the app when the DOM is fully loaded
-document.addEventListener('DOMContentLoaded', () => {
-  initApp();
-  
-  // Initialize budget from storage
-  const savedBudget = loadMonthlyBudget();
-  if (savedBudget > 0) {
-    updateBudgetDisplay(savedBudget, 'monthly-budget-amount');
-    const budgetInput = document.getElementById('monthly-budget');
-    if (budgetInput) {
-      budgetInput.value = savedBudget;
-    }
-  }
-  
-  // Initialize fixed expenses from storage
-  const savedFixedExpenses = loadFixedExpenses();
-  if (savedFixedExpenses > 0) {
-    updateBudgetDisplay(savedFixedExpenses, 'fixed-expenses-amount');
-    const fixedExpensesInput = document.getElementById('fixed-expense');
-    if (fixedExpensesInput) {
-      fixedExpensesInput.value = savedFixedExpenses;
-    }
-  } else {
-    updateBudgetDisplay(0, 'fixed-expenses-amount');
-  }
-  
-  // Initialize spending limit from storage
-  const savedSpendingLimit = loadSpendingLimit();
-  if (savedSpendingLimit > 0) {
-    updateBudgetDisplay(savedSpendingLimit, 'spending-limit-amount');
-    const spendingLimitInput = document.getElementById('spending-limit');
-    if (spendingLimitInput) {
-      spendingLimitInput.value = savedSpendingLimit;
-    }
-  } else {
-    updateBudgetDisplay(0, 'spending-limit-amount');
-  }
-});
+// Format number as currency
+function formatNumberAsCurrency(amount) {
+  return new Intl.NumberFormat('es-AR', {
+    style: 'currency',
+    currency: 'ARS',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(amount);
+}
 
-// Handle input changes when user finishes editing (on change event)
-document.addEventListener('change', (e) => {
-  if (!e.target) return;
+// Show notification
+function showNotification(message, type = 'info') {
+  const notification = document.createElement('div');
+  notification.className = `notification notification-${type}`;
+  notification.textContent = message;
+  document.body.appendChild(notification);
   
-  // Handle monthly budget input
-  if (e.target.id === 'monthly-budget') {
-    const amount = parseFloat(e.target.value) || 0;
-    saveMonthlyBudget(amount);
-  }
-  
-  // Handle fixed expenses input
-  if (e.target.id === 'fixed-expense') {
-    const amount = parseFloat(e.target.value) || 0;
-    saveFixedExpenses(amount);
-  }
-  
-  // Handle spending limit input
-  if (e.target.id === 'spending-limit') {
-    const amount = parseFloat(e.target.value) || 0;
-    saveSpendingLimit(amount);
-  }
-});
-
-// Handle reset button clicks
-document.addEventListener('click', (e) => {
-  const resetBtn = e.target.closest('.reset-btn');
-  if (!resetBtn) return;
-
-  const targetId = resetBtn.getAttribute('data-target');
-  if (!targetId) return;
-
-  // Find the input element by ID and type=number
-  const input = document.querySelector(`#${targetId}[type="number"]`);
-  if (!input) {
-    console.error(`Input element with ID '${targetId}' not found`);
-    return;
-  }
-
-  console.log('Resetting input:', targetId);
-  
-  // Set the input value to 0
-  input.value = '0';
-  
-  // Force update the display by directly calling the save function
-  const amount = 0;
-  if (targetId === 'monthly-budget') {
-    console.log('Saving monthly budget:', amount);
-    saveMonthlyBudget(amount);
-  } else if (targetId === 'fixed-expense') {
-    console.log('Saving fixed expenses:', amount);
-    saveFixedExpenses(amount);
-  } else if (targetId === 'spending-limit') {
-    console.log('Saving spending limit:', amount);
-    saveSpendingLimit(amount);
-  }
-  
-  // Trigger change event to update the display
-  input.dispatchEvent(new Event('change', { bubbles: true }));
-  
-  console.log('Reset completed for:', targetId);
-});
+  setTimeout(() => {
+    notification.classList.add('fade-out');
+    setTimeout(() => notification.remove(), 300);
+  }, 3000);
+}
 
 // Handle theme preference
 function setThemePreference() {
@@ -280,8 +413,8 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', set
 setThemePreference();
 
 // Utility function to format currency
-function formatCurrency(amount, currency = 'BRL') {
-  return new Intl.NumberFormat('pt-BR', {
+function formatCurrency(amount, currency = 'ARS') {
+  return new Intl.NumberFormat('es-AR', {
     style: 'currency',
     currency: currency,
     minimumFractionDigits: 2,
@@ -289,8 +422,41 @@ function formatCurrency(amount, currency = 'BRL') {
   }).format(amount);
 }
 
-// Export functions for later use (when we add more functionality)
+// Cleanup function
+function cleanup() {
+  if (unsubscribeConfig) {
+    unsubscribeConfig();
+    unsubscribeConfig = null;
+  }
+  currentUserId = null;
+}
+
+// Export functions for later use
 window.app = {
   formatCurrency,
   setActiveTab
 };
+
+// Initialize the app when the DOM is fully loaded
+document.addEventListener('DOMContentLoaded', () => {
+  initApp();
+});
+
+// Initialize configuration when user logs in
+document.addEventListener('userLoggedIn', (e) => {
+  console.log('User logged in, initializing app configuration:', e.detail.user.uid);
+  initConfiguration(e.detail.user.uid);
+});
+
+// Cleanup when user logs out
+document.addEventListener('userLoggedOut', () => {
+  console.log('User logged out, cleaning up app configuration');
+  cleanup();
+  
+  // Reset UI
+  updateConfigurationUI({
+    monthlyBudget: 0,
+    fixedExpenses: 0,
+    spendingLimit: 0
+  });
+});

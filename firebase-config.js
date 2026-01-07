@@ -1,7 +1,28 @@
-// Firebase App (the core Firebase SDK) is always required
+// Firebase App (the core Firebase SDK)
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-import { getAuth } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-import { getFirestore, collection, doc, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot, query, where, orderBy, serverTimestamp, writeBatch } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { 
+  getAuth,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut
+} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+import { 
+  getFirestore,
+  collection,
+  doc,
+  setDoc,
+  getDoc,
+  updateDoc,
+  deleteDoc,
+  onSnapshot,
+  query,
+  where,
+  orderBy,
+  serverTimestamp,
+  writeBatch,
+  Timestamp
+} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -18,15 +39,18 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// Collections
+// Helper functions
 const getExpensesCollection = (userId) => collection(db, `usuarios/${userId}/gastos`);
 const getUserConfigDoc = (userId) => doc(db, `usuarios/${userId}/configuracion/config`);
 
-// Export the services we'll need
-const firebaseServices = {
+// Export everything needed
+export {
   auth,
   db,
-  // Firestore helpers
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
   collection,
   doc,
   setDoc,
@@ -39,13 +63,7 @@ const firebaseServices = {
   orderBy,
   serverTimestamp,
   writeBatch,
-  // Custom collection references
+  Timestamp,
   getExpensesCollection,
-  getUserConfigDoc,
-  // Timestamp
-  Timestamp: {
-    now: () => new Date().toISOString().split('T')[0]
-  }
+  getUserConfigDoc
 };
-
-export default firebaseServices;

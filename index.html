@@ -10,42 +10,38 @@
     <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="styles.css">
-    
-    <!-- Firebase SDKs -->
-    <script type="module">
-        // Import the functions you need from the SDKs you need
-        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getAuth } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-        import { getFirestore } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-        
-        // Your web app's Firebase configuration
-        const firebaseConfig = {
-            apiKey: "AIzaSyC5oMo7ZrMUpXGLk39Z6iBC0Drbdlk_KeE",
-            authDomain: "control-gastos-app-572be.firebaseapp.com",
-            projectId: "control-gastos-app-572be",
-            storageBucket: "control-gastos-app-572be.firebasestorage.app",
-            messagingSenderId: "824585639306",
-            appId: "1:824585639306:web:1a442674bb7ff55ca76473"
-        };
-        
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        
-        // Make auth and db available globally
-        window.firebaseAuth = auth;
-        window.firebaseDb = db;
-    </script>
 </head>
 <body>
-    <div class="app-container">
+    <!-- Auth Container (Initially visible) -->
+    <div id="auth-container" class="auth-container">
+        <div class="auth-card">
+            <h2>Control de Gastos</h2>
+            <form id="auth-form" class="auth-form">
+                <div class="form-group">
+                    <label for="auth-email">Email</label>
+                    <input type="email" id="auth-email" required autocomplete="email">
+                </div>
+                <div class="form-group">
+                    <label for="auth-password">Contraseña</label>
+                    <input type="password" id="auth-password" required minlength="6" autocomplete="current-password">
+                </div>
+                <button type="submit" id="auth-submit" class="btn btn-primary">Iniciar Sesión</button>
+                <button type="button" id="auth-toggle" class="btn btn-link">¿No tienes cuenta? Regístrate</button>
+            </form>
+            <div id="auth-error" class="auth-error"></div>
+        </div>
+    </div>
+
+    <!-- App Container (Initially hidden) -->
+    <div class="app-container" style="display: none;">
         <header class="app-header">
             <div class="header-content">
                 <h1>Mi Control de Gastos</h1>
                 <div class="user-info">
                     <span class="username">Usuario</span>
-                    <div class="avatar">U</div>
+                    <button id="logout-btn" class="btn-icon" title="Cerrar Sesión" style="display: none;">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </button>
                 </div>
             </div>
         </header>
@@ -142,7 +138,6 @@
                     </div>
                 </div>
 
-
                 <!-- Categories Breakdown -->
                 <div class="categories-section card">
                     <h3>Gastos por Categoría</h3>
@@ -169,6 +164,7 @@
             <!-- Expenses Section -->
             <section id="expenses" class="tab-content active">
                 <div id="expenses-callout" class="callout" style="display: none;"></div>
+                
                 <div class="expense-form-container">
                     <h2 id="expense-form-title">Nuevo Gasto</h2>
                     <form id="expense-form" class="expense-form">
@@ -203,6 +199,7 @@
                         </div>
                     </form>
                 </div>
+                
                 <div class="expenses-list">
                     <div class="expenses-header">
                         <h2>Historial de Gastos</h2>
@@ -225,6 +222,7 @@
                             </div>
                         </div>
                     </div>
+                    
                     <div class="expenses-filters">
                         <div class="search-box">
                             <input type="text" id="expense-search" placeholder="Buscar gastos...">
@@ -237,6 +235,7 @@
                             <option value="otros">Otros</option>
                         </select>
                     </div>
+                    
                     <div class="expenses-table-container">
                         <table class="expenses-table">
                             <thead>
@@ -328,19 +327,13 @@
     <!-- Load Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
-    <!-- App Scripts (must be in this order) -->
-    <script src="firebase-config.js" type="module"></script>
-    <script src="auth.js" type="module"></script>
-    <script src="app.js" type="module"></script>
-    <script src="expenses.js" type="module"></script>
-    <script src="dashboard.js" type="module"></script>
+    <!-- Firebase Modules -->
+    <script type="module" src="firebase-config.js"></script>
+    <script type="module" src="auth.js"></script>
     
-    <!-- Initialize the app -->
-    <script type="module">
-        // Initialize the app when all modules are loaded
-        document.addEventListener('DOMContentLoaded', () => {
-            console.log('App initialized');
-        });
-    </script>
+    <!-- App Scripts (NO module type) -->
+    <script src="app.js"></script>
+    <script src="expenses.js"></script>
+    <script src="dashboard.js"></script>
 </body>
 </html>

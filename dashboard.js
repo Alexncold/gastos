@@ -22,6 +22,12 @@ const Dashboard = (() => {
     from: null,
     to: null
   };
+  let unsubscribeExpenses = null;
+  let unsubscribeConfig = null;
+  let currentUserId = null;
+  let monthlyBudget = 0;
+  let fixedExpenses = 0;
+  let spendingLimit = 0;
   
   // Category colors for the chart
   const categoryColors = {
@@ -35,26 +41,36 @@ const Dashboard = (() => {
   };
   
   // Initialize the dashboard
-  function init() {
+  function init(userId) {
+    if (!userId) {
+      console.error('No user ID provided to Dashboard.init()');
+      return;
+    }
+    
+    currentUserId = userId;
+    console.log('Initializing Dashboard for user:', userId);
+    
     // Set default date range (current month)
     const today = new Date();
     const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
     const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
     
-    dateFromInput.valueAsDate = firstDayOfMonth;
-    dateToInput.valueAsDate = lastDayOfMonth;
-    
-    // Set max date to today
-    const todayStr = today.toISOString().split('T')[0];
-    dateFromInput.max = todayStr;
-    dateToInput.max = todayStr;
-    
-    // Set min date to 1 year ago
-    const oneYearAgo = new Date();
-    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-    const oneYearAgoStr = oneYearAgo.toISOString().split('T')[0];
-    dateFromInput.min = oneYearAgoStr;
-    dateToInput.min = oneYearAgoStr;
+    if (dateFromInput) {
+      dateFromInput.valueAsDate = firstDayOfMonth;
+      dateToInput.valueAsDate = lastDayOfMonth;
+      
+      // Set max date to today
+      const todayStr = today.toISOString().split('T')[0];
+      dateFromInput.max = todayStr;
+      dateToInput.max = todayStr;
+      
+      // Set min date to 1 year ago
+      const oneYearAgo = new Date();
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+      const oneYearAgoStr = oneYearAgo.toISOString().split('T')[0];
+      dateFromInput.min = oneYearAgoStr;
+      dateToInput.min = oneYearAgoStr;
+    }
     
     // Set initial date filter
     dateFilter = {
@@ -65,48 +81,151 @@ const Dashboard = (() => {
     // Add event listeners
     setupEventListeners();
     
-    // Listen for updates from other modules
-    document.addEventListener('expensesUpdated', loadExpenses);
-    document.addEventListener('budgetUpdated', updateSummaryCards);
+    // Setup real-time listeners
+    setupExpensesListener();
+    setupConfigListener();
     
-    // Load initial data
-    loadExpenses();
+    // Load Chart.js if not already loaded
+    if (typeof Chart === 'undefined') {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/chart.js';
+      script.onload = () => {
+        console.log('Chart.js loaded');
+        updateChart();
+      };
+      document.head.appendChild(script);
+    }
   }
   
   // Set up event listeners
   function setupEventListeners() {
-    applyFilterBtn.addEventListener('click', applyDateFilter);
+    if (applyFilterBtn) {
+      applyFilterBtn.addEventListener('click', applyDateFilter);
+    }
     
     // Update date inputs when they change
-    dateFromInput.addEventListener('change', () => {
-      if (new Date(dateFromInput.value) > new Date(dateToInput.value)) {
-        dateToInput.value = dateFromInput.value;
-      }
+    if (dateFromInput && dateToInput) {
+      dateFromInput.addEventListener('change', () => {
+        if (new Date(dateFromInput.value) > new Date(dateToInput.value)) {
+          dateToInput.value = dateFromInput.value;
+        }
+      });
+      
+      dateToInput.addEventListener('change', () => {
+        if (new Date(dateToInput.value) < new Date(dateFromInput.value)) {
+          dateFromInput.value = dateToInput.value;
+        }
+      });
+    }
+    
+    // Listen for expense changes from other modules
+    document.addEventListener('expensesUpdated', () => {
+      console.log('Expenses updated event received');
+      updateSummaryCards();
     });
     
-    dateToInput.addEventListener('change', () => {
-      if (new Date(dateToInput.value) < new Date(dateFromInput.value)) {
-        dateFromInput.value = dateToInput.value;
-      }
+    // Listen for budget updates
+    document.addEventListener('budgetUpdated', () => {
+      console.log('Budget updated event received');
+      updateSummaryCards();
     });
     
-    // Listen for expense changes
-    document.addEventListener('expensesUpdated', loadExpenses);
+    // Listen for fixed expenses updates
+    document.addEventListener('fixedExpensesUpdated', () => {
+      console.log('Fixed expenses updated event received');
+      updateSummaryCards();
+    });
   }
   
-  // Load expenses from the Expenses module
-  function loadExpenses() {
-    // Get expenses from localStorage
-    const expensesData = localStorage.getItem('expenses');
-    expenses = expensesData ? JSON.parse(expensesData) : [];
+  // Setup real-time listener for expenses from Firestore
+  async function setupExpensesListener() {
+    if (!currentUserId) {
+      console.error('Cannot setup expenses listener: no user ID');
+      return;
+    }
     
-    // Filter expenses by date range
-    filterExpensesByDate();
+    // Unsubscribe from previous listener if exists
+    if (unsubscribeExpenses) {
+      unsubscribeExpenses();
+    }
     
-    // Update UI
-    updateSummaryCards();
-    updateChart();
-    updateCategoriesBreakdown();
+    try {
+      // Dynamically import Firebase functions
+      const { getExpensesCollection, onSnapshot, query, orderBy } = await import('./firebase-config.js');
+      
+      const expensesCollection = getExpensesCollection(currentUserId);
+      const expensesQuery = query(expensesCollection, orderBy('fecha', 'desc'));
+      
+      unsubscribeExpenses = onSnapshot(expensesQuery, 
+        (querySnapshot) => {
+          expenses = [];
+          querySnapshot.forEach((doc) => {
+            expenses.push({ 
+              id: doc.id, 
+              ...doc.data() 
+            });
+          });
+          console.log('Dashboard: Expenses loaded:', expenses.length);
+          
+          // Filter and update UI
+          filterExpensesByDate();
+          updateSummaryCards();
+          updateChart();
+          updateCategoriesBreakdown();
+        },
+        (error) => {
+          console.error('Error getting expenses:', error);
+        }
+      );
+    } catch (error) {
+      console.error('Error setting up expenses listener:', error);
+    }
+  }
+  
+  // Setup real-time listener for configuration from Firestore
+  async function setupConfigListener() {
+    if (!currentUserId) {
+      console.error('Cannot setup config listener: no user ID');
+      return;
+    }
+    
+    // Unsubscribe from previous listener if exists
+    if (unsubscribeConfig) {
+      unsubscribeConfig();
+    }
+    
+    try {
+      // Dynamically import Firebase functions
+      const { getUserConfigDoc, onSnapshot } = await import('./firebase-config.js');
+      
+      const configDoc = getUserConfigDoc(currentUserId);
+      
+      unsubscribeConfig = onSnapshot(configDoc, 
+        (doc) => {
+          if (doc.exists()) {
+            const data = doc.data();
+            monthlyBudget = data.monthlyBudget || 0;
+            fixedExpenses = data.fixedExpenses || 0;
+            spendingLimit = data.spendingLimit || 0;
+            
+            console.log('Dashboard: Config loaded:', { monthlyBudget, fixedExpenses, spendingLimit });
+            
+            // Update UI
+            updateSummaryCards();
+          } else {
+            console.log('Dashboard: No config document found');
+            monthlyBudget = 0;
+            fixedExpenses = 0;
+            spendingLimit = 0;
+          }
+        },
+        (error) => {
+          console.error('Error getting config:', error);
+        }
+      );
+    } catch (error) {
+      console.error('Error setting up config listener:', error);
+    }
   }
   
   // Filter expenses by the selected date range
@@ -114,13 +233,17 @@ const Dashboard = (() => {
     const { from, to } = dateFilter;
     
     filteredExpenses = expenses.filter(expense => {
-      const expenseDate = new Date(expense.fecha);
+      const expenseDate = new Date(expense.fecha + 'T00:00:00');
       return expenseDate >= from && expenseDate <= to;
     });
+    
+    console.log('Filtered expenses:', filteredExpenses.length);
   }
   
   // Apply date filter
   function applyDateFilter() {
+    if (!dateFromInput || !dateToInput) return;
+    
     dateFilter = {
       from: new Date(dateFromInput.value),
       to: new Date(dateToInput.value)
@@ -136,63 +259,39 @@ const Dashboard = (() => {
     updateCategoriesBreakdown();
   }
   
-  // Reset date filter to current month
-  function resetDateFilter() {
-    const today = new Date();
-    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-    const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    
-    dateFromInput.valueAsDate = firstDayOfMonth;
-    dateToInput.valueAsDate = lastDayOfMonth;
-    
-    dateFilter = {
-      from: firstDayOfMonth,
-      to: lastDayOfMonth
-    };
-    
-    filterExpensesByDate();
-    updateSummaryCards();
-    updateChart();
-    updateCategoriesBreakdown();
-  }
-  
   // Update summary cards with current data
   function updateSummaryCards() {
     const today = new Date().toISOString().split('T')[0];
     const oneWeekAgo = new Date();
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
     
-    // Get fixed expenses
-    const fixedExpenses = parseFloat(localStorage.getItem('fixedExpenses')) || 0;
-    
     // Calculate totals (regular expenses + fixed expenses)
-    const regularExpenses = filteredExpenses.reduce((sum, exp) => sum + parseFloat(exp.monto), 0);
+    const regularExpenses = filteredExpenses.reduce((sum, exp) => sum + parseFloat(exp.monto || 0), 0);
     const totalInPeriod = regularExpenses + fixedExpenses;
     
     // Calculate today's total (only regular expenses, fixed are monthly)
     const todayTotal = filteredExpenses
       .filter(exp => exp.fecha === today)
-      .reduce((sum, exp) => sum + parseFloat(exp.monto), 0);
+      .reduce((sum, exp) => sum + parseFloat(exp.monto || 0), 0);
     
     // Calculate weekly total (only regular expenses, fixed are monthly)
     const weeklyTotal = filteredExpenses
-      .filter(exp => new Date(exp.fecha) >= oneWeekAgo)
-      .reduce((sum, exp) => sum + parseFloat(exp.monto), 0);
+      .filter(exp => new Date(exp.fecha + 'T00:00:00') >= oneWeekAgo)
+      .reduce((sum, exp) => sum + parseFloat(exp.monto || 0), 0);
     
-    // Get monthly budget from settings or use 0 if not set
-    const monthlyBudget = parseFloat(localStorage.getItem('monthlyBudget')) || 0;
+    // Calculate remaining budget
     const remainingBudget = Math.max(0, monthlyBudget - totalInPeriod);
     const budgetPercentage = monthlyBudget > 0 ? (totalInPeriod / monthlyBudget) * 100 : 0;
     
     // Update DOM
-    monthlyTotalEl.textContent = formatCurrency(totalInPeriod);
-    dailyTotalEl.textContent = formatCurrency(todayTotal);
-    weeklyTotalEl.textContent = formatCurrency(weeklyTotal);
+    if (monthlyTotalEl) monthlyTotalEl.textContent = formatCurrency(totalInPeriod);
+    if (dailyTotalEl) dailyTotalEl.textContent = formatCurrency(todayTotal);
+    if (weeklyTotalEl) weeklyTotalEl.textContent = formatCurrency(weeklyTotal);
     
     if (monthlyBudget > 0) {
-      remainingAmountEl.textContent = formatCurrency(remainingBudget);
-      monthlyBudgetEl.textContent = `de ${formatCurrency(monthlyBudget)} presupuestados`;
-      budgetProgressEl.textContent = `${budgetPercentage.toFixed(1)}% del presupuesto utilizado`;
+      if (remainingAmountEl) remainingAmountEl.textContent = formatCurrency(remainingBudget);
+      if (monthlyBudgetEl) monthlyBudgetEl.textContent = `de ${formatCurrency(monthlyBudget)} presupuestados`;
+      if (budgetProgressEl) budgetProgressEl.textContent = `${budgetPercentage.toFixed(1)}% del presupuesto utilizado`;
       
       // Update progress bar color based on usage
       const progressBar = document.querySelector('.progress-bar');
@@ -202,15 +301,55 @@ const Dashboard = (() => {
         progressBar.style.backgroundColor = getBudgetColor(budgetPercentage);
       }
     } else {
-      remainingAmountEl.textContent = '-';
-      monthlyBudgetEl.textContent = 'Sin límite establecido';
-      budgetProgressEl.textContent = '';
+      if (remainingAmountEl) remainingAmountEl.textContent = '-';
+      if (monthlyBudgetEl) monthlyBudgetEl.textContent = 'Sin límite establecido';
+      if (budgetProgressEl) budgetProgressEl.textContent = '';
+    }
+    
+    // Check spending limit and show alert if needed
+    checkSpendingLimit(totalInPeriod);
+  }
+  
+  // Check spending limit and show callout
+  function checkSpendingLimit(totalSpent) {
+    const callout = document.getElementById('dashboard-callout');
+    
+    if (!callout || spendingLimit <= 0) {
+      if (callout) callout.style.display = 'none';
+      return;
+    }
+    
+    const percentage = (totalSpent / spendingLimit) * 100;
+    
+    if (percentage >= 80) {
+      let message = '';
+      let className = 'callout-warning';
+      
+      if (percentage >= 100) {
+        message = `🚨 ¡Límite excedido! Has gastado ${formatCurrency(totalSpent)} de tu límite de ${formatCurrency(spendingLimit)}`;
+        className = 'callout-danger';
+      } else if (percentage >= 90) {
+        message = `⚠️ Cuidado: Estás muy cerca del límite. Has gastado el ${percentage.toFixed(1)}% (${formatCurrency(totalSpent)} de ${formatCurrency(spendingLimit)})`;
+        className = 'callout-warning';
+      } else {
+        message = `⚠️ Atención: Has gastado el ${percentage.toFixed(1)}% de tu límite mensual (${formatCurrency(totalSpent)} de ${formatCurrency(spendingLimit)})`;
+        className = 'callout-info';
+      }
+      
+      callout.textContent = message;
+      callout.className = `callout ${className}`;
+      callout.style.display = 'block';
+    } else {
+      callout.style.display = 'none';
     }
   }
   
   // Update the chart with current data
   function updateChart() {
-    if (!chartCtx) return;
+    if (!chartCtx || typeof Chart === 'undefined') {
+      console.log('Chart.js not ready yet');
+      return;
+    }
     
     // Clear previous chart
     if (chart) {
@@ -220,70 +359,56 @@ const Dashboard = (() => {
     
     // Handle no data state
     if (filteredExpenses.length === 0) {
-      // Create a minimal doughnut chart with gray background
       chart = new Chart(chartCtx, {
         type: 'doughnut',
         data: {
-          labels: ['No Data'],
+          labels: ['Sin datos'],
           datasets: [{
             data: [100],
             backgroundColor: ['rgba(220, 220, 220, 0.3)'],
-            borderWidth: 0,
-            hoverBackgroundColor: ['rgba(200, 200, 200, 0.4)']
+            borderWidth: 0
           }]
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
           cutout: '85%',
-          radius: '100%',
-          rotation: -90, // Start from top
-          circumference: 360, // Full circle
           plugins: {
             legend: { display: false },
             tooltip: { enabled: false }
-          },
-          animation: {
-            animateScale: true,
-            animateRotate: true
-          },
-          elements: {
-            arc: {
-              borderWidth: 0
-            }
           }
         },
         plugins: [{
           id: 'no-data-text',
           afterDraw(chart) {
-            const { ctx, chartArea: { left, right, top, bottom, width, height } } = chart;
+            const { ctx, chartArea: { left, right, top, bottom } } = chart;
             const centerX = (left + right) / 2;
             const centerY = (top + bottom) / 2;
             
-            // Add "No Data" text
             ctx.save();
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.font = '14px Nunito Sans, sans-serif';
             ctx.fillStyle = 'rgba(100, 100, 100, 0.7)';
-            ctx.fillText('No Data', centerX, centerY);
+            ctx.fillText('Sin datos', centerX, centerY);
             ctx.restore();
           }
         }]
       });
+      
+      if (chartLegend) chartLegend.innerHTML = '';
       return;
     }
     
     // Group expenses by category
     const categoryTotals = {};
     
-    // Calculate total for each category
     filteredExpenses.forEach(expense => {
       const category = expense.categoria || 'otros';
       if (!categoryTotals[category]) {
         categoryTotals[category] = 0;
       }
-      categoryTotals[category] += parseFloat(expense.monto);
+      categoryTotals[category] += parseFloat(expense.monto || 0);
     });
     
     // Convert to arrays for Chart.js
@@ -310,8 +435,8 @@ const Dashboard = (() => {
         maintainAspectRatio: false,
         cutout: '85%',
         radius: '100%',
-        rotation: -90, // Start from top
-        circumference: 360, // Full circle
+        rotation: -90,
+        circumference: 360,
         plugins: {
           legend: { display: false },
           tooltip: {
@@ -331,11 +456,6 @@ const Dashboard = (() => {
           animateScale: true,
           animateRotate: true
         },
-        elements: {
-          arc: {
-            borderWidth: 0
-          }
-        },
         layout: {
           padding: 10
         }
@@ -344,14 +464,12 @@ const Dashboard = (() => {
         id: 'center-text',
         afterDraw(chart) {
           if (filteredExpenses.length > 0) {
-            const { ctx, chartArea: { left, right, top, bottom, width, height } } = chart;
+            const { ctx, chartArea: { left, right, top, bottom } } = chart;
             const centerX = (left + right) / 2;
             const centerY = (top + bottom) / 2;
             
-            // Calculate total
-            const total = filteredExpenses.reduce((sum, exp) => sum + parseFloat(exp.monto), 0);
+            const total = filteredExpenses.reduce((sum, exp) => sum + parseFloat(exp.monto || 0), 0);
             
-            // Add total amount
             ctx.save();
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
@@ -359,7 +477,6 @@ const Dashboard = (() => {
             ctx.fillStyle = '#333';
             ctx.fillText(formatCurrency(total, true), centerX, centerY - 10);
             
-            // Add "Total" label
             ctx.font = '12px Nunito Sans, sans-serif';
             ctx.fillStyle = '#666';
             ctx.fillText('Total', centerX, centerY + 12);
@@ -398,7 +515,7 @@ const Dashboard = (() => {
     
     filteredExpenses.forEach(expense => {
       const category = expense.categoria || 'otros';
-      const amount = parseFloat(expense.monto);
+      const amount = parseFloat(expense.monto || 0);
       
       if (!categories[category]) {
         categories[category] = 0;
@@ -455,15 +572,14 @@ const Dashboard = (() => {
   
   // Helper function to format currency
   function formatCurrency(amount, skipSymbol = false) {
-    if (isNaN(amount)) return skipSymbol ? '0.00' : '$0.00';
+    if (isNaN(amount) || amount === null || amount === undefined) {
+      return skipSymbol ? '0.00' : '$0.00';
+    }
     
-    // Convert to number if it's a string
     const num = typeof amount === 'string' ? parseFloat(amount) : amount;
     if (isNaN(num)) return skipSymbol ? '0.00' : '$0.00';
     
-    // Format with 2 decimal places and commas as thousand separators
     const formatted = num.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    
     return skipSymbol ? formatted : '$' + formatted;
   }
   
@@ -474,24 +590,43 @@ const Dashboard = (() => {
     return '#ef476f'; // Red
   }
   
+  // Cleanup function
+  function cleanup() {
+    if (unsubscribeExpenses) {
+      unsubscribeExpenses();
+      unsubscribeExpenses = null;
+    }
+    if (unsubscribeConfig) {
+      unsubscribeConfig();
+      unsubscribeConfig = null;
+    }
+    if (chart) {
+      chart.destroy();
+      chart = null;
+    }
+    expenses = [];
+    filteredExpenses = [];
+    currentUserId = null;
+    monthlyBudget = 0;
+    fixedExpenses = 0;
+    spendingLimit = 0;
+  }
+  
   // Public API
   return {
     init,
-    loadExpenses
+    cleanup
   };
 })();
 
-// Initialize the dashboard when the DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-  // Load Chart.js
-  const script = document.createElement('script');
-  script.src = 'https://cdn.jsdelivr.net/npm/chart.js';
-  script.onload = Dashboard.init;
-  document.head.appendChild(script);
-  
-  // Load Font Awesome for icons
-  const fontAwesome = document.createElement('link');
-  fontAwesome.rel = 'stylesheet';
-  fontAwesome.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css';
-  document.head.appendChild(fontAwesome);
+// Initialize the dashboard when the user is logged in
+document.addEventListener('userLoggedIn', (e) => {
+  console.log('User logged in, initializing Dashboard:', e.detail.user.uid);
+  Dashboard.init(e.detail.user.uid);
+});
+
+// Cleanup when user logs out
+document.addEventListener('userLoggedOut', () => {
+  console.log('User logged out, cleaning up Dashboard');
+  Dashboard.cleanup();
 });
