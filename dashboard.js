@@ -8,7 +8,7 @@ const Dashboard = (() => {
   const dailyTotalEl = document.getElementById('daily-total');
   const weeklyTotalEl = document.getElementById('weekly-total');
   const remainingAmountEl = document.getElementById('remaining-amount');
-  const monthlyBudgetEl = document.getElementById('monthly-budget');
+  const monthlyBudgetEl = document.getElementById('monthly-budget-text');
   const budgetProgressEl = document.getElementById('budget-progress');
   const chartCtx = document.getElementById('expenses-chart')?.getContext('2d');
   const chartLegend = document.getElementById('chart-legend');
@@ -289,22 +289,22 @@ const Dashboard = (() => {
     if (weeklyTotalEl) weeklyTotalEl.textContent = formatCurrency(weeklyTotal);
     
     if (monthlyBudget > 0) {
-      if (remainingAmountEl) remainingAmountEl.textContent = formatCurrency(remainingBudget);
-      if (monthlyBudgetEl) monthlyBudgetEl.textContent = `de ${formatCurrency(monthlyBudget)} presupuestados`;
-      if (budgetProgressEl) budgetProgressEl.textContent = `${budgetPercentage.toFixed(1)}% del presupuesto utilizado`;
-      
-      // Update progress bar color based on usage
-      const progressBar = document.querySelector('.progress-bar');
-      if (progressBar) {
-        const percentage = Math.min(100, budgetPercentage);
-        progressBar.style.width = `${percentage}%`;
-        progressBar.style.backgroundColor = getBudgetColor(budgetPercentage);
-      }
-    } else {
-      if (remainingAmountEl) remainingAmountEl.textContent = '-';
-      if (monthlyBudgetEl) monthlyBudgetEl.textContent = 'Sin límite establecido';
-      if (budgetProgressEl) budgetProgressEl.textContent = '';
-    }
+  if (remainingAmountEl) remainingAmountEl.textContent = formatCurrency(remainingBudget);
+  if (monthlyBudgetEl) monthlyBudgetEl.textContent = `de ${formatCurrency(monthlyBudget)} presupuestados`;
+  if (budgetProgressEl) budgetProgressEl.textContent = `${budgetPercentage.toFixed(1)}% del presupuesto utilizado`;
+  
+  // Update progress bar color based on usage
+  const progressBar = document.querySelector('.progress-bar');
+  if (progressBar) {
+    const percentage = Math.min(100, budgetPercentage);
+    progressBar.style.width = `${percentage}%`;
+    progressBar.style.backgroundColor = getBudgetColor(budgetPercentage);
+  }
+} else {
+  if (remainingAmountEl) remainingAmountEl.textContent = '-';
+  if (monthlyBudgetEl) monthlyBudgetEl.textContent = 'Sin límite establecido';
+  if (budgetProgressEl) budgetProgressEl.textContent = '';
+}
     
     // Check spending limit and show alert if needed
     checkSpendingLimit(totalInPeriod);

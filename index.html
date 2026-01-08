@@ -13,24 +13,27 @@
 </head>
 <body>
     <!-- Auth Container (Initially visible) -->
-    <div id="auth-container" class="auth-container">
-        <div class="auth-card">
-            <h2>Control de Gastos</h2>
-            <form id="auth-form" class="auth-form">
-                <div class="form-group">
-                    <label for="auth-email">Email</label>
-                    <input type="email" id="auth-email" required autocomplete="email">
-                </div>
-                <div class="form-group">
-                    <label for="auth-password">Contraseña</label>
-                    <input type="password" id="auth-password" required minlength="6" autocomplete="current-password">
-                </div>
-                <button type="submit" id="auth-submit" class="btn btn-primary">Iniciar Sesión</button>
-                <button type="button" id="auth-toggle" class="btn btn-link">¿No tienes cuenta? Regístrate</button>
-            </form>
-            <div id="auth-error" class="auth-error"></div>
-        </div>
+   <div id="auth-container" class="auth-container">
+    <div class="auth-card">
+        <h2>Control de Gastos</h2>
+        <p style="text-align: center; color: #6c757d; margin-bottom: 1.5rem;">
+            Acceso restringido
+        </p>
+        <form id="auth-form" class="auth-form">
+            <div class="form-group">
+                <label for="auth-email">Email</label>
+                <input type="email" id="auth-email" required autocomplete="email" value="gastos@presupuesto.com">
+            </div>
+            <div class="form-group">
+                <label for="auth-password">Contraseña</label>
+                <input type="password" id="auth-password" required minlength="6" autocomplete="current-password">
+            </div>
+            <button type="submit" id="auth-submit" class="btn btn-primary">Iniciar Sesión</button>
+            <button type="button" id="auth-toggle" class="btn btn-link" style="display: none;">¿No tienes cuenta? Regístrate</button>
+        </form>
+        <div id="auth-error" class="auth-error"></div>
     </div>
+</div>
 
     <!-- App Container (Initially hidden) -->
     <div class="app-container" style="display: none;">
@@ -105,7 +108,7 @@
                         <div class="card-content">
                             <h3>Mes Actual</h3>
                             <p class="amount" id="monthly-total">$0.00</p>
-                            <span class="subtext" id="monthly-budget">Sin límite establecido</span>
+                            <span class="subtext" id="monthly-budget-text">Sin límite establecido</span>
                         </div>
                     </div>
                     <div class="card">

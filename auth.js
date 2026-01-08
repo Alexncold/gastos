@@ -2,9 +2,11 @@ import {
   auth,
   onAuthStateChanged,
   signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
   signOut
 } from './firebase-config.js';
+
+// CONFIGURACIÓN: Email permitido
+const ALLOWED_EMAIL = 'gastos@presupuesto.com';
 
 // DOM Elements
 const authContainer = document.getElementById('auth-container');
@@ -21,23 +23,29 @@ const logoutBtn = document.getElementById('logout-btn');
 const errorMessages = {
   'auth/user-not-found': 'Usuario no encontrado',
   'auth/wrong-password': 'Contraseña incorrecta',
-  'auth/email-already-in-use': 'Este email ya está registrado',
-  'auth/weak-password': 'La contraseña debe tener al menos 6 caracteres',
   'auth/invalid-email': 'Email inválido',
   'auth/too-many-requests': 'Demasiados intentos. Intenta más tarde.',
   'auth/invalid-credential': 'Credenciales inválidas',
+  'auth/network-request-failed': 'Error de conexión. Verifica tu internet.',
   'default': 'Ocurrió un error. Por favor, inténtalo de nuevo.'
 };
 
 // State
-let isLogin = true;
 let currentUser = null;
 
 // Initialize auth state listener
 onAuthStateChanged(auth, (user) => {
   if (user) {
-    currentUser = user;
-    onLoginSuccess(user);
+    // Verificar que el usuario sea el permitido
+    if (user.email === ALLOWED_EMAIL) {
+      currentUser = user;
+      onLoginSuccess(user);
+    } else {
+      // Si no es el usuario permitido, cerrar sesión
+      signOut(auth);
+      showAuthUI();
+      showError('Acceso no autorizado. Solo el usuario autorizado puede acceder.');
+    }
   } else {
     currentUser = null;
     showAuthUI();
@@ -51,49 +59,35 @@ authForm.addEventListener('submit', async (e) => {
   const email = authEmailInput.value.trim();
   const password = authPasswordInput.value;
   
+  // Verificar que sea el email permitido
+  if (email !== ALLOWED_EMAIL) {
+    showError('Acceso no autorizado. Solo el usuario autorizado puede acceder.');
+    return;
+  }
+  
   try {
     authSubmitBtn.disabled = true;
-    authSubmitBtn.textContent = 'Procesando...';
+    authSubmitBtn.textContent = 'Iniciando sesión...';
     authError.textContent = '';
     
-    if (isLogin) {
-      await signInWithEmailAndPassword(auth, email, password);
-    } else {
-      await createUserWithEmailAndPassword(auth, email, password);
-    }
+    await signInWithEmailAndPassword(auth, email, password);
     
     // Reset form
     authForm.reset();
   } catch (error) {
     console.error('Auth error:', error);
     const errorMessage = errorMessages[error.code] || errorMessages['default'];
-    authError.textContent = errorMessage;
-    authError.style.display = 'block';
+    showError(errorMessage);
   } finally {
     authSubmitBtn.disabled = false;
-    authSubmitBtn.textContent = isLogin ? 'Iniciar Sesión' : 'Registrarse';
+    authSubmitBtn.textContent = 'Iniciar Sesión';
   }
 });
 
-// Toggle between login and register
-authToggleBtn.addEventListener('click', () => {
-  isLogin = !isLogin;
-  
-  if (isLogin) {
-    authSubmitBtn.textContent = 'Iniciar Sesión';
-    authToggleBtn.textContent = '¿No tienes cuenta? Regístrate';
-    authEmailInput.setAttribute('autocomplete', 'email');
-    authPasswordInput.setAttribute('autocomplete', 'current-password');
-  } else {
-    authSubmitBtn.textContent = 'Registrarse';
-    authToggleBtn.textContent = '¿Ya tienes cuenta? Inicia Sesión';
-    authEmailInput.setAttribute('autocomplete', 'email');
-    authPasswordInput.setAttribute('autocomplete', 'new-password');
-  }
-  
-  authError.textContent = '';
-  authError.style.display = 'none';
-});
+// Ocultar el botón de toggle (ya no se puede registrar)
+if (authToggleBtn) {
+  authToggleBtn.style.display = 'none';
+}
 
 // Handle logout
 if (logoutBtn) {
@@ -134,6 +128,12 @@ function onLoginSuccess(user) {
   document.dispatchEvent(new CustomEvent('userLoggedIn', {
     detail: { user: { uid: user.uid, email: user.email } }
   }));
+}
+
+// Show error in auth form
+function showError(message) {
+  authError.textContent = message;
+  authError.style.display = 'block';
 }
 
 // Show notification

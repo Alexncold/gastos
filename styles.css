@@ -930,23 +930,6 @@ textarea:focus {
   line-height: 1.4;
 }
 
-/* Dark mode adjustments */
-@media (prefers-color-scheme: dark) {
-  .settings-group {
-    background-color: var(--gray-800);
-    border: 1px solid var(--gray-700);
-  }
-  
-  .settings-group h3 {
-    border-bottom-color: var(--gray-700);
-    color: var(--gray-200);
-  }
-  
-  .input-info {
-    color: var(--gray-400);
-  }
-}
-
 /* Animations */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10px); }
@@ -990,61 +973,6 @@ textarea:focus {
   
   .tab-btn {
     min-width: 100px;
-  }
-}
-
-/* Dark Mode Support */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --light: #1a1a2e;
-    --dark: #f8f9fa;
-    --gray-100: #16213e;
-    --gray-200: #1a1a2e;
-    --gray-300: #16213e;
-    --gray-400: #4a4a6d;
-    --gray-500: #8d93ab;
-    --gray-600: #d1d5db;
-    --gray-700: #e5e7eb;
-    --gray-800: #f3f4f6;
-    --gray-900: #f9fafb;
-  }
-  
-  body {
-    background-color: #0f0f1a;
-    color: var(--gray-200);
-  }
-  
-  .app-container {
-    background-color: #0f0f1a;
-  }
-  
-  .app-header,
-  .tabs,
-  .card,
-  .expense-form-container {
-    background-color: #1a1a2e;
-    color: var(--gray-200);
-  }
-  
-  input[type="text"],
-  input[type="number"],
-  input[type="email"],
-  input[type="password"],
-  input[type="date"],
-  select,
-  textarea {
-    background-color: #16213e;
-    border-color: #2a2a4a;
-    color: var(--gray-200);
-  }
-  
-  .empty-state {
-    background-color: #16213e;
-    border-color: #2a2a4a;
-  }
-  
-  .tabs {
-    border-bottom-color: #2a2a4a;
   }
 }
 
